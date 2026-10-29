@@ -85,6 +85,11 @@ export const CONFIG = {
     '4': { id: '4', name: '4th Gear', maxKmh: 102, minKmh: 46, optimalKmh: [58, 92], accelFactor: 0.75 },
     '5': { id: '5', name: '5th Gear', maxKmh: 135, minKmh: 65, optimalKmh: [80, 125], accelFactor: 0.62 },
   },
+
+  // Visual Overlays Configuration
+  OVERLAYS: {
+    showObstacleBoxes: false, // Default false: evaluation runs in background without showing visible boxes around obstacles on screen
+  },
 };
 
 export const TELEMETRY_FIELDS = {

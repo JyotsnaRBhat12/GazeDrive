@@ -1,7 +1,7 @@
 // GazeDrive Real-Time AI Detection & Driver Attention Engine
 // Integrates MediaPipe Iris Tracking (478 3D Landmarks) + Pretrained Object Detection (COCO-SSD) + 3D Head Pose (Yaw/Pitch/Roll) + PERCLOS & Fatigue Analysis
 
-import { gaze } from './config.js';
+import { CONFIG, gaze } from './config.js';
 import { visionMamba } from './visionMamba.js';
 import { gazeCalibration } from './gazeCalibration.js';
 import { scenarioEngine } from './scenarioEngine.js';
@@ -455,7 +455,8 @@ function updateFatigueMetrics(eyesOpenPct, avgEar) {
     }
   } else {
     eyeClosureStartTime = 0;
-    if (isEyesPaused && eyePauseReason === 'EYES_CLOSED') {
+    // Eyes are open and face is tracked: clear pause state automatically
+    if (isEyesPaused) {
       isEyesPaused = false;
       eyePauseReason = null;
       gaze.valid = true;
@@ -587,7 +588,7 @@ function handleFaceLost(w, h) {
   eyeClosureStartTime = 0;
   if (!eyeHiddenStartTime) eyeHiddenStartTime = performance.now();
 
-  if (performance.now() - eyeHiddenStartTime >= 180) {
+  if (performance.now() - eyeHiddenStartTime >= 350) {
     isEyesPaused = true;
     eyePauseReason = 'EYES_NOT_VISIBLE';
     currentEyesOpen = 0;
@@ -1497,78 +1498,80 @@ function drawRoadAIOverlay(hazardsList, width, height, gazePt, signsOverlay = []
     }
   }
 
-  // 4. Draw Bounding Boxes for Each Hazard
-  for (const h of hazardsList) {
-    const isPed = h.type === 'PEDESTRIAN' || h.name === 'PEDESTRIAN' || h.name === 'PERSON';
-    let boxColor = isPed ? '#f59e0b' : '#ef4444';
-    if (h.isScenario) boxColor = h.alertActive ? '#ef4444' : '#00d2b4';
+  // 4. Draw Bounding Boxes for Each Hazard (Only if showObstacleBoxes is enabled in CONFIG)
+  if (CONFIG.OVERLAYS && CONFIG.OVERLAYS.showObstacleBoxes) {
+    for (const h of hazardsList) {
+      const isPed = h.type === 'PEDESTRIAN' || h.name === 'PEDESTRIAN' || h.name === 'PERSON';
+      let boxColor = isPed ? '#f59e0b' : '#ef4444';
+      if (h.isScenario) boxColor = h.alertActive ? '#ef4444' : '#00d2b4';
 
-    const labelText = h.isScenario
-      ? `⚡ OFFLINE HAZARD (YOLOv8 + Vision Mamba) · ${h.name} (${h.distanceM}m)`
-      : (isPed ? `🚶 PEDESTRIAN - ${h.distanceM} m` : `🚗 VEHICLE - ${h.distanceM} m`);
+      const labelText = h.isScenario
+        ? `⚡ OFFLINE HAZARD (YOLOv8 + Vision Mamba) · ${h.name} (${h.distanceM}m)`
+        : (isPed ? `🚶 PEDESTRIAN - ${h.distanceM} m` : `🚗 VEHICLE - ${h.distanceM} m`);
 
-    roadOverlayCtx.save();
-    roadOverlayCtx.strokeStyle = boxColor;
-    roadOverlayCtx.lineWidth = h.isScenario ? 3 : 2.5;
-    roadOverlayCtx.strokeRect(h.minX, h.minY, h.boxW, h.boxH);
-
-    if (h.spotted) {
-      roadOverlayCtx.fillStyle = 'rgba(0, 229, 163, 0.22)';
-      roadOverlayCtx.fillRect(h.minX, h.minY, h.boxW, h.boxH);
-      roadOverlayCtx.strokeStyle = '#00e5a3';
-      roadOverlayCtx.lineWidth = 3.5;
+      roadOverlayCtx.save();
+      roadOverlayCtx.strokeStyle = boxColor;
+      roadOverlayCtx.lineWidth = h.isScenario ? 3 : 2.5;
       roadOverlayCtx.strokeRect(h.minX, h.minY, h.boxW, h.boxH);
-    }
 
-    const tagH = 22;
-    const tagW = Math.max(130, labelText.length * 7.5);
-    const tagX = Math.round(h.screenX - tagW / 2);
-    const tagY = Math.round(h.minY - tagH - 5);
+      if (h.spotted) {
+        roadOverlayCtx.fillStyle = 'rgba(0, 229, 163, 0.22)';
+        roadOverlayCtx.fillRect(h.minX, h.minY, h.boxW, h.boxH);
+        roadOverlayCtx.strokeStyle = '#00e5a3';
+        roadOverlayCtx.lineWidth = 3.5;
+        roadOverlayCtx.strokeRect(h.minX, h.minY, h.boxW, h.boxH);
+      }
 
-    roadOverlayCtx.fillStyle = boxColor;
-    roadOverlayCtx.beginPath();
-    roadOverlayCtx.roundRect(tagX, tagY, tagW, tagH, 4);
-    roadOverlayCtx.fill();
+      const tagH = 22;
+      const tagW = Math.max(130, labelText.length * 7.5);
+      const tagX = Math.round(h.screenX - tagW / 2);
+      const tagY = Math.round(h.minY - tagH - 5);
 
-    roadOverlayCtx.fillStyle = '#0b0f19';
-    roadOverlayCtx.font = 'bold 11px Inter, sans-serif';
-    roadOverlayCtx.textAlign = 'center';
-    roadOverlayCtx.textBaseline = 'middle';
-    roadOverlayCtx.fillText(labelText, tagX + tagW / 2, tagY + tagH / 2);
-
-    if (h.isScenario) {
-      const latText = h.reactionTimeMs
-        ? `👁️ Fixation Latency: ${h.reactionTimeMs}ms (${h.isLatencyPass ? '≤1200ms PASS' : 'SLOW'})`
-        : '👁️ Fixation: Searching Target...';
-      const dwellText = `⏱️ Dwell: ${h.dwellMs || 0}ms (${h.isDwellPass ? '≥150ms PASS' : '<150ms'})`;
-
-      roadOverlayCtx.fillStyle = 'rgba(11, 16, 27, 0.92)';
-      roadOverlayCtx.strokeStyle = h.isLatencyPass && h.isDwellPass ? '#00e5a3' : '#f59e0b';
-      roadOverlayCtx.lineWidth = 1.5;
+      roadOverlayCtx.fillStyle = boxColor;
       roadOverlayCtx.beginPath();
-      roadOverlayCtx.roundRect(h.screenX - 120, h.maxY + 6, 240, 36, 6);
-      roadOverlayCtx.fill();
-      roadOverlayCtx.stroke();
-
-      roadOverlayCtx.fillStyle = h.isLatencyPass ? '#00e5a3' : '#f59e0b';
-      roadOverlayCtx.font = 'bold 10px Inter, sans-serif';
-      roadOverlayCtx.fillText(latText, h.screenX, h.maxY + 18);
-
-      roadOverlayCtx.fillStyle = h.isDwellPass ? '#00e5a3' : '#94a3b8';
-      roadOverlayCtx.fillText(dwellText, h.screenX, h.maxY + 32);
-    } else if (h.spotted) {
-      const verPillText = `✔ SPOTTED (${h.reactionTimeMs} ms)`;
-      roadOverlayCtx.fillStyle = '#00e5a3';
-      roadOverlayCtx.beginPath();
-      roadOverlayCtx.roundRect(h.screenX - 65, h.maxY + 4, 130, 18, 4);
+      roadOverlayCtx.roundRect(tagX, tagY, tagW, tagH, 4);
       roadOverlayCtx.fill();
 
-      roadOverlayCtx.fillStyle = '#05100c';
-      roadOverlayCtx.font = 'bold 10px Inter, sans-serif';
-      roadOverlayCtx.fillText(verPillText, h.screenX, h.maxY + 13);
-    }
+      roadOverlayCtx.fillStyle = '#0b0f19';
+      roadOverlayCtx.font = 'bold 11px Inter, sans-serif';
+      roadOverlayCtx.textAlign = 'center';
+      roadOverlayCtx.textBaseline = 'middle';
+      roadOverlayCtx.fillText(labelText, tagX + tagW / 2, tagY + tagH / 2);
 
-    roadOverlayCtx.restore();
+      if (h.isScenario) {
+        const latText = h.reactionTimeMs
+          ? `👁️ Fixation Latency: ${h.reactionTimeMs}ms (${h.isLatencyPass ? '≤1200ms PASS' : 'SLOW'})`
+          : '👁️ Fixation: Searching Target...';
+        const dwellText = `⏱️ Dwell: ${h.dwellMs || 0}ms (${h.isDwellPass ? '≥150ms PASS' : '<150ms'})`;
+
+        roadOverlayCtx.fillStyle = 'rgba(11, 16, 27, 0.92)';
+        roadOverlayCtx.strokeStyle = h.isLatencyPass && h.isDwellPass ? '#00e5a3' : '#f59e0b';
+        roadOverlayCtx.lineWidth = 1.5;
+        roadOverlayCtx.beginPath();
+        roadOverlayCtx.roundRect(h.screenX - 120, h.maxY + 6, 240, 36, 6);
+        roadOverlayCtx.fill();
+        roadOverlayCtx.stroke();
+
+        roadOverlayCtx.fillStyle = h.isLatencyPass ? '#00e5a3' : '#f59e0b';
+        roadOverlayCtx.font = 'bold 10px Inter, sans-serif';
+        roadOverlayCtx.fillText(latText, h.screenX, h.maxY + 18);
+
+        roadOverlayCtx.fillStyle = h.isDwellPass ? '#00e5a3' : '#94a3b8';
+        roadOverlayCtx.fillText(dwellText, h.screenX, h.maxY + 32);
+      } else if (h.spotted) {
+        const verPillText = `✔ SPOTTED (${h.reactionTimeMs} ms)`;
+        roadOverlayCtx.fillStyle = '#00e5a3';
+        roadOverlayCtx.beginPath();
+        roadOverlayCtx.roundRect(h.screenX - 65, h.maxY + 4, 130, 18, 4);
+        roadOverlayCtx.fill();
+
+        roadOverlayCtx.fillStyle = '#05100c';
+        roadOverlayCtx.font = 'bold 10px Inter, sans-serif';
+        roadOverlayCtx.fillText(verPillText, h.screenX, h.maxY + 13);
+      }
+
+      roadOverlayCtx.restore();
+    }
   }
 
   // 5. Draw Driver's Gaze Focus Reticle on Road View
@@ -1756,4 +1759,35 @@ export function drawGazeSparkline(canvasId) {
 
 export function getEmaGazeDeltas() {
   return { x: emaGazeDeltaX, y: emaGazeDeltaY };
+}
+
+/**
+ * Toggles or sets visible bounding box rendering around hazards on screen.
+ * Background gaze and safety checks remain active regardless of this setting.
+ */
+export function toggleObstacleBoxes(forceState) {
+  if (!CONFIG.OVERLAYS) CONFIG.OVERLAYS = {};
+  CONFIG.OVERLAYS.showObstacleBoxes = forceState !== undefined ? forceState : !CONFIG.OVERLAYS.showObstacleBoxes;
+  return CONFIG.OVERLAYS.showObstacleBoxes;
+}
+
+export function isObstacleBoxesVisible() {
+  return Boolean(CONFIG.OVERLAYS && CONFIG.OVERLAYS.showObstacleBoxes);
+}
+
+/**
+ * Immediately forces unpause and resets eye/face pause state.
+ */
+export function forceResumeEyes() {
+  isEyesPaused = false;
+  eyePauseReason = null;
+  eyeClosureStartTime = 0;
+  eyeHiddenStartTime = 0;
+  simulatedEyesState = 'OPEN';
+  simulatedDriverPose = 'ROAD_AHEAD';
+  currentGazeStatus = 'Good';
+  currentDistraction = 'Low';
+  currentAttentionZone = 'Road Ahead';
+  currentGazeFocus = 'Road Ahead';
+  gaze.valid = true;
 }

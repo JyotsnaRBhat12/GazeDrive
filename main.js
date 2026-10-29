@@ -14,6 +14,8 @@ import { setupEnvironmentSky } from './assetLoader.js';
 import { setEnvironmentQuality } from './scenery.js';
 import { scenarioEngine } from './scenarioEngine.js';
 import * as trafficSigns from './trafficSigns.js';
+import { forceResumeEyes } from './aiDetection.js';
+import { voiceNavigator } from './voiceNavigator.js';
 
 let scene, camera, renderer, clock, dirLight;
 let cameraMode = 'DRIVER'; // Default to Photorealistic First-Person Driver View ('DRIVER' or 'CHASE')
@@ -40,9 +42,8 @@ function initApp() {
   const width = container.clientWidth || 960;
   const height = container.clientHeight || 540;
 
-// 1. Scene Setup & Urban HDRI / Atmospheric Haze Sky
+  // 1. Scene Setup
   scene = new THREE.Scene();
-  setupEnvironmentSky(scene, renderer);
 
   // 2. Camera Setup
   camera = new THREE.PerspectiveCamera(CONFIG.CAMERA.fov, width / height, 0.1, 800);
@@ -58,7 +59,10 @@ function initApp() {
 
   container.appendChild(renderer.domElement);
 
-  // 4. Photorealistic Lighting System
+  // 4. Urban HDRI / Atmospheric Haze Sky
+  setupEnvironmentSky(scene, renderer);
+
+  // 5. Photorealistic Lighting System
   setupLighting();
 
   // 5. Initialize Sub-modules
@@ -72,6 +76,13 @@ function initApp() {
 
   // 6. Initialize Keyboard Controls with callbacks
   controls.init({
+    onVoiceToggle: () => {
+      const isMuted = voiceNavigator.toggleMute();
+      hud.updateVoiceButtonState(isMuted);
+    },
+    onEyeResume: () => {
+      forceResumeEyes();
+    },
     onCameraToggle: () => {
       cameraMode = cameraMode === 'CHASE' ? 'DRIVER' : 'CHASE';
       car.setCameraMode(cameraMode);
@@ -287,6 +298,18 @@ function animate() {
   const allHazards = hazards.getAllActiveHazards(camera, w, h, carPos.z);
   const hazardDebug = hazards.getHazardDebugInfo(camera, w, h);
 
+  // Google Maps-style spoken voice navigation & road hazard alerts
+  if (effectiveDt > 0) {
+    voiceNavigator.update({
+      carPos,
+      speedKmh,
+      signsOverlay,
+      upcomingIntersection,
+      allHazards,
+      scenarioState,
+    });
+  }
+
   hud.update({
     speedKmh,
     speedMs,
@@ -353,4 +376,8 @@ export function setQuality(quality) {
 
 window.setQuality = setQuality;
 window.gaze = gaze;
-window.addEventListener('DOMContentLoaded', initApp);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

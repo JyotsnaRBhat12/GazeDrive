@@ -18,6 +18,9 @@ import {
   cycleSimulatedPose,
   getSimulatedPose,
   getEmaGazeDeltas,
+  toggleObstacleBoxes,
+  isObstacleBoxesVisible,
+  forceResumeEyes,
 } from './aiDetection.js';
 import { visionMamba } from './visionMamba.js';
 import { gazeCalibration } from './gazeCalibration.js';
@@ -25,6 +28,8 @@ import { esp32Haptics } from './esp32Haptics.js';
 import { geminiViva } from './geminiViva.js';
 import { scenarioEngine } from './scenarioEngine.js';
 import * as trafficSigns from './trafficSigns.js';
+import { voiceNavigator } from './voiceNavigator.js';
+import { indianTrafficRules } from './indianTrafficRules.js';
 
 let isPlaying = true;
 let isManualControlActive = true;
@@ -36,6 +41,7 @@ let lastKnownDistanceM = 0;
 let lastKnownScore = 76;
 let recentEventsLog = [];
 let detectedHazardsCache = [];
+let activeScorecardTab = 'THEORY';
 
 /**
  * Initializes the GazeDrive AI UI layout matching the reference image.
@@ -206,6 +212,12 @@ export function init() {
                 <span>Road View (Front Camera)</span>
               </div>
               <div class="view-header-actions" style="display: flex; align-items: center; gap: 10px;">
+                <button id="btn-toggle-voice" class="cam-toggle-btn" style="border-color: rgba(0, 210, 180, 0.45); color: #00d2b4;" title="Toggle Google Maps-style spoken road navigation alerts [M]">
+                  🔊 Voice: On
+                </button>
+                <button id="btn-toggle-boxes" class="cam-toggle-btn" style="border-color: rgba(148, 163, 184, 0.35); color: #94a3b8;" title="Toggle visible bounding boxes on road obstacles">
+                  📦 Boxes: Off
+                </button>
                 <button id="btn-toggle-camera-view" class="cam-toggle-btn" style="border-color: rgba(56, 189, 248, 0.45); color: #38bdf8;" title="Toggle First-Person Cockpit / Third-Person Chase Camera (Press V or C)">
                   🎥 View: Cockpit [V]
                 </button>
@@ -619,7 +631,7 @@ export function init() {
         </div>
 
         <div class="footer-actions">
-          <button id="btn-open-viva" class="footer-btn btn-viva"><span class="btn-ic">🎙️</span> Voice Viva</button>
+          <button id="btn-open-viva" class="footer-btn btn-viva" title="Open Traffic Rules Viva Examination"><span class="btn-ic">📋</span> Traffic Rules Viva</button>
           <button id="btn-end-test" class="footer-btn btn-end"><span class="btn-ic">⏹</span> End Test</button>
           <button id="btn-save-report" class="footer-btn btn-save"><span class="btn-ic">📥</span> Save Report</button>
         </div>
@@ -630,33 +642,39 @@ export function init() {
         <div class="test-scorecard-card">
           <div class="scorecard-header">
             <div>
-              <div class="scorecard-title">OFFICIAL DRIVING SKILL TEST REPORT</div>
-              <div class="scorecard-subtitle">AI GAZE & HAZARD REACTION EVALUATION · CANDIDATE #402</div>
+              <div id="scorecard-title" class="scorecard-title">TRAFFIC RULES VIVA EXAMINATION REPORT</div>
+              <div id="scorecard-subtitle" class="scorecard-subtitle">INDIAN TRAFFIC RULES & MVA 2019 VIVA · CANDIDATE #402</div>
             </div>
             <button id="btn-modal-close-test-x" class="debug-close-btn" style="font-size: 16px;">✕</button>
           </div>
 
+          <!-- SCORECARD TABS: Viva vs Practical -->
+          <div class="scorecard-tabs-bar">
+            <button id="tab-scorecard-theory" class="sc-tab-btn active">📋 Traffic Rules Viva (Questions & Marks)</button>
+            <button id="tab-scorecard-practical" class="sc-tab-btn">🚗 3D Driving Skill & Reaction</button>
+          </div>
+
           <div class="scorecard-summary-row">
             <div id="scorecard-circle" class="score-big-circle">
-              <span id="modal-test-score" class="score-num">76</span>
-              <span class="score-max">/ 100 PTS</span>
+              <span id="modal-test-score" class="score-num">0</span>
+              <span id="modal-test-score-unit" class="score-max">/ 30 MARKS</span>
             </div>
             <div class="verdict-box">
-              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Official Test Verdict</span>
-              <span id="modal-test-verdict" class="verdict-tag pass">PASSED / LICENCE ELIGIBLE</span>
+              <span id="modal-test-verdict-label" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Official Test Verdict</span>
+              <span id="modal-test-verdict" class="verdict-tag pass">TEST PENDING</span>
               <span id="modal-test-timestamp" style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Evaluated in real-time</span>
             </div>
           </div>
 
-          <div style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-top: 4px;">
-            EVALUATION CRITERIA CHECKLIST:
+          <div id="modal-checklist-title" style="font-size: 12px; font-weight: 800; color: var(--text-main); margin-top: 4px;">
+            ITEMIZED QUESTION & MARKS BREAKDOWN:
           </div>
 
           <div id="modal-test-checklist" class="checklist-table"></div>
 
           <div class="scorecard-actions">
-            <button id="btn-modal-reset-test" class="action-btn-red">🔄 Retake / Reset Test</button>
-            <button id="btn-scorecard-take-viva" class="action-btn-teal" style="background:#a855f7; border:1px solid #c084fc; color:#fff;">🎙️ Start Oral Viva Exam</button>
+            <button id="btn-modal-reset-test" class="action-btn-red">🔄 Retake Viva Exam</button>
+            <button id="btn-scorecard-take-viva" class="action-btn-teal" style="background:#00d2b4; border:1px solid #00d2b4; color:#0b0f19;">📋 Continue Viva Exam</button>
             <button id="btn-modal-close-test" class="action-btn-teal">Close Report</button>
           </div>
         </div>
@@ -831,98 +849,88 @@ export function init() {
         </div>
       </div>
 
-      <!-- GEMINI FLASH VOICE VIVA EXAMINER MODAL -->
+      <!-- TRAFFIC RULES VIVA EXAMINATION MODAL -->
       <div id="gemini-viva-modal" class="gazedrive-modal-backdrop">
-        <div class="viva-modal-content">
+        <div class="flashcard-modal-content">
           <div class="modal-header">
             <div class="modal-title-group">
               <div class="title-with-badge">
-                <span class="viva-gemini-spark">✨</span>
-                <h2 class="modal-title">Gemini Flash AI Voice Viva Examiner</h2>
-                <span id="viva-category-badge" class="viva-model-pill" style="background:#00d2b426; border-color:#00d2b4; color:#00d2b4;">🚦 TRAFFIC RULES</span>
-                <span id="viva-q-indicator" style="font-size:11px; font-weight:700; color:var(--text-dim); margin-left:8px;">Question 1 of 6</span>
+                <span style="font-size: 22px;">📋</span>
+                <h2 class="modal-title">Traffic Rules Viva Examination</h2>
+                <span id="fc-category-badge" class="card-category-tag" style="background:#00d2b426; border-color:#00d2b4; color:#00d2b4;">🛑 MANDATORY SIGNS</span>
+                <span id="fc-progress-counter" style="font-size:12px; font-weight:700; color:var(--text-dim); margin-left:8px;">Question 1 of 30</span>
               </div>
-              <p class="modal-subtitle">Real-time candidate oral inquiry covering Traffic Rules, Road Signs, Speed Limits, Hazard Perception & Gaze Saccades</p>
+              <p class="modal-subtitle">Indian Traffic Rules, IRC:67 Road Signs & Motor Vehicles Act Viva Test</p>
             </div>
             <button id="btn-modal-close-viva-x" class="modal-close-btn">&times;</button>
           </div>
 
-          <!-- EXAMINER AVATAR & QUESTION CARD -->
-          <div class="viva-question-card">
-            <div class="viva-examiner-avatar-box">
-              <div class="avatar-wave-ring" id="viva-avatar-ring">
-                <div class="examiner-icon">🎙️</div>
-              </div>
-              <span class="examiner-name">AI Chief Examiner</span>
+          <!-- TOOLBAR: CATEGORY FILTERS & MODE TOGGLE -->
+          <div class="flashcard-toolbar">
+            <div class="flashcard-cat-filters" id="fc-cat-filters">
+              <button class="cat-filter-btn active" data-cat="ALL">📚 All Rules (30)</button>
+              <button class="cat-filter-btn" data-cat="MANDATORY">🛑 Mandatory Signs</button>
+              <button class="cat-filter-btn" data-cat="CAUTIONARY">⚠️ Cautionary Signs</button>
+              <button class="cat-filter-btn" data-cat="RULES_OF_ROAD">🚗 Rules of the Road</button>
+              <button class="cat-filter-btn" data-cat="PENALTIES">⚖️ Penalties & Laws</button>
             </div>
-            <div class="viva-question-body">
-              <div class="viva-q-tag">EXAMINER QUESTION:</div>
-              <p id="viva-question-text" class="viva-question-text">
-                Analyzing trial telemetry and preparing performance-targeted viva inquiry...
+            <div class="mode-toggle-group">
+              <button id="btn-mode-flashcard" class="mode-btn active">🎴 Flashcard Mode</button>
+              <button id="btn-mode-quiz" class="mode-btn">📝 Quiz Test Mode</button>
+            </div>
+          </div>
+
+          <!-- MAIN FLASHCARD DISPLAY -->
+          <div class="flashcard-main-card" id="fc-main-card">
+            <div class="flashcard-card-meta">
+              <span id="fc-card-cat-label" class="card-category-tag">🛑 Mandatory Regulatory Sign</span>
+              <span id="fc-score-mini" class="fc-score-badge">Score: 0 / 0 (0%)</span>
+            </div>
+
+            <div class="flashcard-content-layout">
+              <!-- Visual Traffic Sign Display (if sign exists) -->
+              <div id="fc-sign-container" class="flashcard-sign-display">
+                <!-- SVG injected dynamically -->
+              </div>
+              <div class="flashcard-prompt-area">
+                <h3 id="fc-card-title" class="flashcard-title">STOP Sign</h3>
+                <p id="fc-card-question" class="flashcard-question">
+                  What is the mandatory driver action required when encountering this octagonal sign?
+                </p>
+              </div>
+            </div>
+
+            <!-- Multiple Choice Interactive Options -->
+            <div class="flashcard-options-list" id="fc-options-list">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Revealed Answer & Explanation Panel -->
+            <div id="fc-revealed-panel" class="flashcard-revealed-panel" style="display: none;">
+              <div class="revealed-header">
+                <span class="verified-answer-pill">✔ Verified Official Rule Answer</span>
+                <span id="fc-rule-citation" class="citation-tag">Section 119 Motor Vehicles Act</span>
+              </div>
+              <p id="fc-explanation-text" class="revealed-explanation-text">
+                Explanation text here...
               </p>
-              <div class="viva-audio-controls">
-                <button id="btn-viva-speak-q" class="viva-audio-btn">
-                  <span>🔊</span> Listen / Replay Question
-                </button>
-                <button id="btn-viva-next-q" class="viva-audio-btn" style="border-color:#38bdf8; background:#38bdf826; color:#7dd3fc;">
-                  <span>⏭️</span> Next Viva Question (Rules / Hazards)
-                </button>
-                <div class="viva-audio-bars" id="viva-audio-wave">
-                  <span></span><span></span><span></span><span></span><span></span>
-                </div>
-              </div>
             </div>
           </div>
 
-          <!-- CANDIDATE RESPONSE & TRANSCRIPTION -->
-          <div class="viva-candidate-card">
-            <div class="viva-card-top-row">
-              <span class="viva-card-title">🗣️ Candidate Voice Response</span>
-              <span class="viva-mic-status" id="viva-mic-status">Microphone Idle</span>
+          <!-- NAVIGATION & ACTION BAR -->
+          <div class="flashcard-controls-row">
+            <div class="ctrl-btn-group">
+              <button id="btn-fc-prev" class="fc-btn">⬅️ Previous</button>
+              <button id="btn-fc-flip" class="fc-btn fc-btn-teal">🔄 Flip / Show Answer</button>
+              <button id="btn-fc-next" class="fc-btn">Next ➡️</button>
             </div>
 
-            <div class="viva-transcript-box" id="viva-transcript-box">
-              <span class="transcript-placeholder" id="viva-transcript-placeholder">
-                Click "Start Speaking" or press [M] and articulate your hazard perception process...
-              </span>
-              <p id="viva-candidate-transcript" class="candidate-speech-text" style="display:none;"></p>
+            <div class="ctrl-btn-group">
+              <button id="btn-fc-shuffle" class="fc-btn" title="Shuffle flashcards randomly">🔀 Shuffle</button>
+              <button id="btn-fc-reset" class="fc-btn" title="Reset answers & score">🔄 Restart</button>
+              <button id="btn-viva-view-scorecard" class="fc-btn" style="background:var(--accent-cyan); color:#0b101b;">📋 View Scorecard</button>
+              <button id="btn-modal-close-viva" class="fc-btn">Close</button>
             </div>
-
-            <div class="viva-input-actions">
-              <button id="btn-viva-start-mic" class="viva-mic-btn">
-                <span class="mic-icon">🎤</span> <span id="viva-mic-btn-text">Start Speaking (Mic)</span>
-              </button>
-              <button id="btn-viva-demo-answer" class="viva-demo-btn" title="Insert Standard Verified Candidate Answer">
-                Fill Verified Answer
-              </button>
-              <button id="btn-viva-evaluate" class="viva-eval-btn">
-                <span>⚡</span> Evaluate with Gemini Flash
-              </button>
-            </div>
-          </div>
-
-          <!-- GEMINI EVALUATION RESULT CARD -->
-          <div id="viva-result-card" class="viva-result-card" style="display: none;">
-            <div class="viva-result-header">
-              <div class="result-score-block">
-                <span id="viva-score-grade" class="viva-big-grade">A+</span>
-                <div class="score-texts">
-                  <span id="viva-score-num" class="viva-score-pts">92 / 100</span>
-                  <span class="score-sub">Viva Proficiency</span>
-                </div>
-              </div>
-              <div class="endorsement-badge" id="viva-endorsement-badge">
-                RECOMMENDED FOR LICENCE ENDORSEMENT
-              </div>
-            </div>
-            <p id="viva-feedback-text" class="viva-feedback-text">
-              The candidate demonstrated sound hazard anticipation, maintaining appropriate foveal gaze fixation while timely applying braking force within the alert window.
-            </p>
-          </div>
-
-          <div class="scorecard-actions">
-            <button id="btn-viva-view-scorecard" class="action-btn-teal" style="background:var(--accent-cyan); color:#0b101b; margin-right:auto;">📋 View Final Scorecard</button>
-            <button id="btn-modal-close-viva" class="action-btn-teal">Close Viva Examiner</button>
           </div>
         </div>
       </div>
@@ -1013,6 +1021,24 @@ function bindEvents() {
     });
   }
 
+  const btnToggleVoice = document.getElementById('btn-toggle-voice');
+  if (btnToggleVoice) {
+    btnToggleVoice.addEventListener('click', () => {
+      const isMuted = voiceNavigator.toggleMute();
+      updateVoiceButtonState(isMuted);
+    });
+  }
+
+  const btnToggleBoxes = document.getElementById('btn-toggle-boxes');
+  if (btnToggleBoxes) {
+    btnToggleBoxes.addEventListener('click', () => {
+      const active = toggleObstacleBoxes();
+      btnToggleBoxes.textContent = active ? '📦 Boxes: On' : '📦 Boxes: Off';
+      btnToggleBoxes.style.color = active ? '#00d2b4' : '#94a3b8';
+      btnToggleBoxes.style.borderColor = active ? 'rgba(0, 210, 180, 0.5)' : 'rgba(148, 163, 184, 0.35)';
+    });
+  }
+
   const btnToggleCameraView = document.getElementById('btn-toggle-camera-view');
   if (btnToggleCameraView) {
     btnToggleCameraView.addEventListener('click', () => {
@@ -1051,6 +1077,8 @@ function bindEvents() {
   const btnCloseModal = document.getElementById('btn-modal-close-test');
   const btnCloseModalX = document.getElementById('btn-modal-close-test-x');
   const btnResetModal = document.getElementById('btn-modal-reset-test');
+  const tabScorecardTheory = document.getElementById('tab-scorecard-theory');
+  const tabScorecardPractical = document.getElementById('tab-scorecard-practical');
 
   const openModal = () => {
     renderDrivingTestScorecard();
@@ -1060,6 +1088,19 @@ function bindEvents() {
     if (testModal) testModal.classList.remove('active');
   };
 
+  if (tabScorecardTheory) {
+    tabScorecardTheory.addEventListener('click', () => {
+      activeScorecardTab = 'THEORY';
+      renderDrivingTestScorecard();
+    });
+  }
+  if (tabScorecardPractical) {
+    tabScorecardPractical.addEventListener('click', () => {
+      activeScorecardTab = 'PRACTICAL';
+      renderDrivingTestScorecard();
+    });
+  }
+
   const btnScorecardTakeViva = document.getElementById('btn-scorecard-take-viva');
   if (btnScorecardTakeViva) {
     btnScorecardTakeViva.addEventListener('click', () => {
@@ -1068,19 +1109,32 @@ function bindEvents() {
     });
   }
 
-  if (btnEndTest) btnEndTest.addEventListener('click', openModal);
+  if (btnEndTest) {
+    btnEndTest.addEventListener('click', () => {
+      activeScorecardTab = 'PRACTICAL';
+      openModal();
+    });
+  }
   if (btnOpenScorecard) btnOpenScorecard.addEventListener('click', openModal);
   if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
   if (btnCloseModalX) btnCloseModalX.addEventListener('click', closeModal);
 
   if (btnResetModal) {
     btnResetModal.addEventListener('click', () => {
-      car.reset();
-      ruleEngine.reset();
-      scenarioEngine.resetTrial();
-      handleReset();
-      renderDrivingTestScorecard();
-      closeModal();
+      if (activeScorecardTab === 'THEORY') {
+        indianTrafficRules.reset();
+        renderFlashcardUI();
+        renderDrivingTestScorecard();
+        closeModal();
+        openViva();
+      } else {
+        car.reset();
+        ruleEngine.reset();
+        scenarioEngine.resetTrial();
+        handleReset();
+        renderDrivingTestScorecard();
+        closeModal();
+      }
     });
   }
 
@@ -1208,52 +1262,126 @@ function bindEvents() {
   };
 
   // =========================================================================
-  // GEMINI FLASH VOICE VIVA EXAMINER
+  // =========================================================================
+  // RTO INDIAN TRAFFIC RULES & SIGN IDENTIFICATION FLASHCARDS CONTROLLER
   // =========================================================================
   const vivaModal = document.getElementById('gemini-viva-modal');
   const btnOpenViva = document.getElementById('btn-open-viva');
   const btnCloseViva = document.getElementById('btn-modal-close-viva');
   const btnCloseVivaX = document.getElementById('btn-modal-close-viva-x');
-  const btnVivaSpeakQ = document.getElementById('btn-viva-speak-q');
-  const btnVivaStartMic = document.getElementById('btn-viva-start-mic');
-  const btnVivaMicText = document.getElementById('viva-mic-btn-text');
-  const btnVivaDemo = document.getElementById('btn-viva-demo-answer');
-  const btnVivaEval = document.getElementById('btn-viva-evaluate');
-  const vivaQText = document.getElementById('viva-question-text');
-  const vivaTranscript = document.getElementById('viva-candidate-transcript');
-  const vivaPlaceholder = document.getElementById('viva-transcript-placeholder');
-  const vivaMicStatus = document.getElementById('viva-mic-status');
-  const vivaResultCard = document.getElementById('viva-result-card');
-  const vivaAvatarRing = document.getElementById('viva-avatar-ring');
-  const vivaAudioWave = document.getElementById('viva-audio-wave');
 
-  const openViva = async (customContext = {}) => {
+  const fcCategoryBadge = document.getElementById('fc-category-badge');
+  const fcProgressCounter = document.getElementById('fc-progress-counter');
+  const fcCardCatLabel = document.getElementById('fc-card-cat-label');
+  const fcScoreMini = document.getElementById('fc-score-mini');
+  const fcSignContainer = document.getElementById('fc-sign-container');
+  const fcCardTitle = document.getElementById('fc-card-title');
+  const fcCardQuestion = document.getElementById('fc-card-question');
+  const fcOptionsList = document.getElementById('fc-options-list');
+  const fcRevealedPanel = document.getElementById('fc-revealed-panel');
+  const fcRuleCitation = document.getElementById('fc-rule-citation');
+  const fcExplanationText = document.getElementById('fc-explanation-text');
+
+  const btnFcPrev = document.getElementById('btn-fc-prev');
+  const btnFcFlip = document.getElementById('btn-fc-flip');
+  const btnFcNext = document.getElementById('btn-fc-next');
+  const btnFcShuffle = document.getElementById('btn-fc-shuffle');
+  const btnFcReset = document.getElementById('btn-fc-reset');
+  const btnModeFlashcard = document.getElementById('btn-mode-flashcard');
+  const btnModeQuiz = document.getElementById('btn-mode-quiz');
+  const fcCatFilters = document.getElementById('fc-cat-filters');
+
+  function renderFlashcardUI() {
+    const card = indianTrafficRules.getCurrentCard();
+    if (!card) return;
+
+    const summary = indianTrafficRules.getScoreSummary();
+
+    // 1. Meta & Header
+    if (fcCategoryBadge) fcCategoryBadge.textContent = card.categoryLabel;
+    if (fcProgressCounter) {
+      fcProgressCounter.textContent = `Question ${indianTrafficRules.currentIndex + 1} of ${indianTrafficRules.cards.length}`;
+    }
+    if (fcCardCatLabel) fcCardCatLabel.textContent = card.categoryLabel;
+    if (fcScoreMini) {
+      fcScoreMini.textContent = `Score: ${summary.correct} / ${summary.answered} (${summary.scorePct}%)`;
+    }
+
+    // 2. Title & Question
+    if (fcCardTitle) fcCardTitle.textContent = card.title;
+    if (fcCardQuestion) fcCardQuestion.textContent = card.question;
+
+    // 3. Visual Traffic Sign Display
+    if (fcSignContainer) {
+      if (card.signSvg) {
+        fcSignContainer.style.display = 'flex';
+        fcSignContainer.innerHTML = card.signSvg;
+      } else {
+        fcSignContainer.style.display = 'flex';
+        fcSignContainer.innerHTML = `<span style="font-size: 54px;">🚗</span>`;
+      }
+    }
+
+    // 4. Citation & Explanation
+    if (fcRuleCitation) fcRuleCitation.textContent = card.ruleCitation || 'Indian Motor Vehicles Act';
+    if (fcExplanationText) fcExplanationText.textContent = card.explanation;
+
+    // 5. Check answered state or flipped state
+    const answerRecord = indianTrafficRules.getAnswer(card.id);
+    const isAnswered = answerRecord !== null;
+    const isFlipped = indianTrafficRules.isFlipped;
+
+    if (fcRevealedPanel) {
+      fcRevealedPanel.style.display = (isAnswered || isFlipped) ? 'flex' : 'none';
+    }
+
+    // 6. Render Multiple Choice Options
+    if (fcOptionsList) {
+      fcOptionsList.innerHTML = '';
+      const letters = ['A', 'B', 'C', 'D'];
+
+      card.options.forEach((optText, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'flashcard-option-btn';
+
+        if (isAnswered) {
+          if (idx === card.correctIndex) {
+            btn.classList.add('correct');
+          } else if (idx === answerRecord.selectedIndex) {
+            btn.classList.add('wrong');
+          }
+          btn.disabled = true;
+        } else if (isFlipped && idx === card.correctIndex) {
+          btn.classList.add('correct');
+        }
+
+        btn.innerHTML = `<span class="opt-badge">${letters[idx]}</span> <span>${optText}</span>`;
+
+        btn.addEventListener('click', () => {
+          if (isAnswered) return;
+          indianTrafficRules.submitAnswer(card.id, idx);
+          renderFlashcardUI();
+          renderDrivingTestScorecard();
+        });
+
+        fcOptionsList.appendChild(btn);
+      });
+    }
+
+    // 7. Navigation Buttons
+    if (btnFcPrev) btnFcPrev.disabled = indianTrafficRules.currentIndex === 0;
+    if (btnFcNext) btnFcNext.disabled = indianTrafficRules.currentIndex === indianTrafficRules.cards.length - 1;
+    if (btnFcFlip) {
+      btnFcFlip.textContent = isFlipped ? '🔄 Hide Answer' : '🔄 Flip / Show Answer';
+    }
+  }
+
+  const openViva = () => {
     if (vivaModal) vivaModal.classList.add('active');
-    const scnState = scenarioEngine.getState();
-
-    const q = await geminiViva.generateQuestion({
-      candidateId: 'Candidate #402',
-      scenarioName: scnState.activeScenario ? scnState.activeScenario.name : 'Urban Pedestrian Crossing',
-      firstFixationLatencyMs: scnState.firstFixationLatencyMs || 420,
-      secondaryDwellMs: scnState.secondaryDwellMs || 280,
-      reactionInput: scnState.reactionInput || 'BRAKE',
-      outcome: scnState.outcome || 'SUCCESS',
-      score: lastKnownScore,
-      ...customContext,
-    });
-
-    if (vivaQText) vivaQText.textContent = q;
-    const catBadge = document.getElementById('viva-category-badge');
-    const qInd = document.getElementById('viva-q-indicator');
-    if (catBadge) catBadge.textContent = geminiViva.currentCategoryBadge || '🚦 TRAFFIC RULES';
-    if (qInd) qInd.textContent = `Question ${geminiViva.currentQuestionIndex + 1} of ${geminiViva.totalQuestions}`;
-
-    // Auto speak question
-    setTimeout(() => geminiViva.speakQuestion(), 300);
+    renderFlashcardUI();
   };
 
   const closeViva = () => {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (vivaModal) vivaModal.classList.remove('active');
   };
 
@@ -1261,36 +1389,70 @@ function bindEvents() {
   if (btnCloseViva) btnCloseViva.addEventListener('click', closeViva);
   if (btnCloseVivaX) btnCloseVivaX.addEventListener('click', closeViva);
 
-  if (btnVivaSpeakQ) {
-    btnVivaSpeakQ.addEventListener('click', () => {
-      geminiViva.speakQuestion();
+  if (btnFcPrev) {
+    btnFcPrev.addEventListener('click', () => {
+      indianTrafficRules.prevCard();
+      renderFlashcardUI();
     });
   }
 
-  const btnVivaNextQ = document.getElementById('btn-viva-next-q');
-  if (btnVivaNextQ) {
-    btnVivaNextQ.addEventListener('click', async () => {
-      const scnState = scenarioEngine.getState();
-      const q = await geminiViva.nextQuestion({
-        candidateId: 'Candidate #402',
-        scenarioName: scnState.activeScenario ? scnState.activeScenario.name : 'Urban Pedestrian Crossing',
-        firstFixationLatencyMs: scnState.firstFixationLatencyMs || 420,
-        secondaryDwellMs: scnState.secondaryDwellMs || 280,
-        reactionInput: scnState.reactionInput || 'BRAKE',
-        outcome: scnState.outcome || 'SUCCESS',
-        score: lastKnownScore,
+  if (btnFcNext) {
+    btnFcNext.addEventListener('click', () => {
+      indianTrafficRules.nextCard();
+      renderFlashcardUI();
+    });
+  }
+
+  if (btnFcFlip) {
+    btnFcFlip.addEventListener('click', () => {
+      indianTrafficRules.flipCard();
+      renderFlashcardUI();
+    });
+  }
+
+  if (btnFcShuffle) {
+    btnFcShuffle.addEventListener('click', () => {
+      indianTrafficRules.shuffle();
+      renderFlashcardUI();
+    });
+  }
+
+  if (btnFcReset) {
+    btnFcReset.addEventListener('click', () => {
+      indianTrafficRules.reset();
+      renderFlashcardUI();
+      renderDrivingTestScorecard();
+    });
+  }
+
+  if (btnModeFlashcard) {
+    btnModeFlashcard.addEventListener('click', () => {
+      indianTrafficRules.setMode('FLASHCARD');
+      btnModeFlashcard.classList.add('active');
+      if (btnModeQuiz) btnModeQuiz.classList.remove('active');
+      renderFlashcardUI();
+    });
+  }
+
+  if (btnModeQuiz) {
+    btnModeQuiz.addEventListener('click', () => {
+      indianTrafficRules.setMode('QUIZ');
+      btnModeQuiz.classList.add('active');
+      if (btnModeFlashcard) btnModeFlashcard.classList.remove('active');
+      renderFlashcardUI();
+    });
+  }
+
+  if (fcCatFilters) {
+    const filterBtns = fcCatFilters.querySelectorAll('.cat-filter-btn');
+    filterBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const cat = btn.getAttribute('data-cat');
+        indianTrafficRules.setCategory(cat);
+        renderFlashcardUI();
       });
-      if (vivaQText) vivaQText.textContent = q;
-      if (vivaTranscript) {
-        vivaTranscript.style.display = 'none';
-        vivaTranscript.textContent = '';
-      }
-      if (vivaPlaceholder) vivaPlaceholder.style.display = 'block';
-      if (vivaResultCard) vivaResultCard.style.display = 'none';
-      const catBadge = document.getElementById('viva-category-badge');
-      const qInd = document.getElementById('viva-q-indicator');
-      if (catBadge) catBadge.textContent = geminiViva.currentCategoryBadge || '🚦 TRAFFIC RULES';
-      if (qInd) qInd.textContent = `Question ${geminiViva.currentQuestionIndex + 1} of ${geminiViva.totalQuestions}`;
     });
   }
 
@@ -1298,99 +1460,11 @@ function bindEvents() {
   if (btnVivaViewScorecard) {
     btnVivaViewScorecard.addEventListener('click', () => {
       closeViva();
+      activeScorecardTab = 'THEORY';
       renderDrivingTestScorecard();
       openModal();
     });
   }
-
-  if (btnVivaStartMic) {
-    btnVivaStartMic.addEventListener('click', () => {
-      if (geminiViva.isListening) {
-        geminiViva.stopListening();
-        if (btnVivaMicText) btnVivaMicText.textContent = 'Start Speaking (Mic)';
-        if (vivaMicStatus) {
-          vivaMicStatus.textContent = 'Microphone Idle';
-          vivaMicStatus.classList.remove('active');
-        }
-      } else {
-        geminiViva.startListening();
-        if (btnVivaMicText) btnVivaMicText.textContent = 'Stop Recording';
-        if (vivaMicStatus) {
-          vivaMicStatus.textContent = '🔴 Listening to Candidate Speech...';
-          vivaMicStatus.classList.add('active');
-        }
-      }
-    });
-  }
-
-  if (btnVivaDemo) {
-    btnVivaDemo.addEventListener('click', () => {
-      const demoAnswer =
-        geminiViva.currentVerifiedAnswer ||
-        'In a 30 km/h school zone, vehicle stopping distance is roughly 13 meters compared to over 27 meters at 50 km/h, dramatically lowering pedestrian fatality risk. Approaching the zebra crossing, I scanned both curbs with peripheral vision, checked left and right mirrors, and maintained a foveal dwell.';
-      geminiViva.setCandidateAnswer(demoAnswer);
-      if (vivaPlaceholder) vivaPlaceholder.style.display = 'none';
-      if (vivaTranscript) {
-        vivaTranscript.style.display = 'block';
-        vivaTranscript.textContent = `"${demoAnswer}"`;
-      }
-    });
-  }
-
-  if (btnVivaEval) {
-    btnVivaEval.addEventListener('click', async () => {
-      const answer = vivaTranscript ? vivaTranscript.textContent : '';
-      btnVivaEval.innerHTML = '<span>⏳</span> Evaluating...';
-
-      const scnState = scenarioEngine.getState();
-      const res = await geminiViva.evaluateAnswer(answer || 'Candidate maintained appropriate foveal gaze fixation and defensive braking.', {
-        firstFixationLatencyMs: scnState.firstFixationLatencyMs || 420,
-        secondaryDwellMs: scnState.secondaryDwellMs || 280,
-        reactionInput: scnState.reactionInput || 'BRAKE',
-        outcome: scnState.outcome || 'SUCCESS',
-        score: lastKnownScore,
-      });
-
-      btnVivaEval.innerHTML = '<span>⚡</span> Evaluate with Gemini Flash';
-      if (vivaResultCard) vivaResultCard.style.display = 'flex';
-
-      const gradeEl = document.getElementById('viva-score-grade');
-      const numEl = document.getElementById('viva-score-num');
-      const fbEl = document.getElementById('viva-feedback-text');
-      const endEl = document.getElementById('viva-endorsement-badge');
-
-      if (gradeEl) gradeEl.textContent = res.grade;
-      if (numEl) numEl.textContent = `${res.score} / 100`;
-      if (fbEl) fbEl.textContent = res.feedback;
-      if (endEl) {
-        endEl.textContent = res.endorsement;
-        endEl.className = res.score >= 75 ? 'endorsement-badge' : 'endorsement-badge fail';
-      }
-
-      // Re-render official scorecard to reflect new viva score
-      renderDrivingTestScorecard();
-
-      logRecentEvent('✨', `Gemini Voice Viva evaluated: Grade ${res.grade} (${res.score} pts)`, 'High');
-    });
-  }
-
-  geminiViva.onStateChange = (state) => {
-    if (vivaAvatarRing) {
-      vivaAvatarRing.classList.toggle('speaking', state.isSpeaking);
-    }
-    if (vivaAudioWave) {
-      vivaAudioWave.classList.toggle('active', state.isSpeaking);
-    }
-    if (state.transcript && vivaTranscript) {
-      if (vivaPlaceholder) vivaPlaceholder.style.display = 'none';
-      vivaTranscript.style.display = 'block';
-      vivaTranscript.textContent = `"${state.transcript}"`;
-    }
-    const catBadge = document.getElementById('viva-category-badge');
-    const qInd = document.getElementById('viva-q-indicator');
-    if (catBadge && state.categoryBadge) catBadge.textContent = state.categoryBadge;
-    if (qInd && state.questionIndex !== undefined) qInd.textContent = `Question ${state.questionIndex + 1} of ${state.totalQuestions || 6}`;
-  };
 
   // =========================================================================
   // OFFLINE SCENARIO CYCLER (YOLOv8 + Vision Mamba)
@@ -1510,9 +1584,9 @@ function bindEvents() {
   if (btnSimEyes) btnSimEyes.addEventListener('click', handleEyeToggle);
   if (btnResumeEyes) {
     btnResumeEyes.addEventListener('click', () => {
-      while (getSimulatedEyesState() !== 'OPEN') {
-        toggleSimulatedEyesState();
-      }
+      forceResumeEyes();
+      const pauseOverlay = document.getElementById('eye-pause-overlay');
+      if (pauseOverlay) pauseOverlay.style.display = 'none';
       if (lblSimEyes) lblSimEyes.textContent = 'Test Eyes: Open';
       if (btnSimEyes) btnSimEyes.classList.remove('active');
     });
@@ -1909,12 +1983,163 @@ function logRecentEvent(icon, desc, priority = 'Info') {
 
 /**
  * Official Scorecard Modal Renderer.
+ * Supports RTO Theory Exam (Questions & Marks) and 3D Driving Skill & Reaction.
  */
 export function renderDrivingTestScorecard() {
+  const tabTheoryBtn = document.getElementById('tab-scorecard-theory');
+  const tabPracticalBtn = document.getElementById('tab-scorecard-practical');
+  if (tabTheoryBtn && tabPracticalBtn) {
+    if (activeScorecardTab === 'THEORY') {
+      tabTheoryBtn.classList.add('active');
+      tabPracticalBtn.classList.remove('active');
+    } else {
+      tabPracticalBtn.classList.add('active');
+      tabTheoryBtn.classList.remove('active');
+    }
+  }
+
+  const titleEl = document.getElementById('scorecard-title');
+  const subtitleEl = document.getElementById('scorecard-subtitle');
+  const scoreEl = document.getElementById('modal-test-score');
+  const scoreUnitEl = document.getElementById('modal-test-score-unit');
+  const scoreCircle = document.getElementById('scorecard-circle');
+  const verdictLabelEl = document.getElementById('modal-test-verdict-label');
+  const verdictEl = document.getElementById('modal-test-verdict');
+  const timeEl = document.getElementById('modal-test-timestamp');
+  const checklistTitleEl = document.getElementById('modal-checklist-title');
+  const checklistEl = document.getElementById('modal-test-checklist');
+  const btnReset = document.getElementById('btn-modal-reset-test');
+  const btnVivaAction = document.getElementById('btn-scorecard-take-viva');
+
+  // =========================================================================
+  // TAB 1: TRAFFIC RULES VIVA EXAM (QUESTIONS & MARKS)
+  // =========================================================================
+  if (activeScorecardTab === 'THEORY') {
+    const fc = indianTrafficRules.getScoreSummary();
+    if (titleEl) titleEl.textContent = "TRAFFIC RULES VIVA EXAMINATION REPORT";
+    if (subtitleEl) subtitleEl.textContent = 'INDIAN TRAFFIC RULES & ROAD SIGN IDENTIFICATION VIVA (IRC:67 / MVA 2019)';
+    if (verdictLabelEl) verdictLabelEl.textContent = 'Viva Exam Result';
+
+    if (fc.answered === 0) {
+      if (scoreEl) scoreEl.textContent = '0';
+      if (scoreUnitEl) scoreUnitEl.textContent = `/ ${fc.total} MARKS`;
+      if (scoreCircle) {
+        scoreCircle.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+        scoreCircle.style.color = '#94a3b8';
+      }
+      if (verdictEl) {
+        verdictEl.textContent = 'TEST PENDING / CLICK BELOW TO START';
+        verdictEl.className = 'verdict-tag';
+        verdictEl.style.background = 'rgba(148, 163, 184, 0.15)';
+        verdictEl.style.color = '#94a3b8';
+      }
+      if (timeEl) {
+        timeEl.textContent = `No questions attempted yet. Pass mark: 75% (${Math.ceil(fc.total * 0.75)}/${fc.total} correct). Click below to start viva.`;
+      }
+      if (checklistTitleEl) checklistTitleEl.textContent = 'VIVA EXAM STATUS:';
+      if (checklistEl) {
+        checklistEl.innerHTML = `
+          <div style="text-align:center; padding: 36px 20px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 12px;">
+            <div style="font-size: 38px; margin-bottom: 8px;">📋</div>
+            <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-bottom: 6px;">No Viva Questions Attempted Yet</div>
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0 0 16px 0; max-width: 480px; margin-inline: auto; line-height: 1.5;">
+              Answer basic Indian traffic rules, mandatory & cautionary road signs, and right-of-way viva questions to calculate your official score card and marks breakdown.
+            </p>
+            <button id="btn-sc-start-theory-inner" class="action-btn-teal" style="display:inline-flex; align-items:center; gap:8px; padding:10px 22px; font-size:13px; font-weight:800; cursor:pointer; background:#00d2b4; color:#0b0f19; border:none; border-radius:8px;">
+              🚀 Start 30-Question Viva Exam Now
+            </button>
+          </div>
+        `;
+        const btnInner = document.getElementById('btn-sc-start-theory-inner');
+        if (btnInner) {
+          btnInner.addEventListener('click', () => {
+            const m = document.getElementById('driving-test-modal');
+            if (m) m.classList.remove('active');
+            const vm = document.getElementById('gemini-viva-modal');
+            if (vm) vm.classList.add('active');
+          });
+        }
+      }
+    } else {
+      if (scoreEl) scoreEl.textContent = fc.correct;
+      if (scoreUnitEl) {
+        scoreUnitEl.innerHTML = `
+          <span style="display:block; font-size: 13px; font-weight: 800; color: var(--text-muted);">/ ${fc.answered} MARKS</span>
+          <span style="font-size: 11px; font-weight: 800; color: ${fc.isPassing ? '#10b981' : '#ef4444'};">${fc.scorePct}% ACCURACY</span>
+        `;
+      }
+      if (scoreCircle) {
+        scoreCircle.style.borderColor = fc.isPassing ? '#10b981' : '#ef4444';
+        scoreCircle.style.color = fc.isPassing ? '#10b981' : '#ef4444';
+      }
+      if (verdictEl) {
+        verdictEl.textContent = fc.isPassing
+          ? `PASSED / TRAFFIC RULES VIVA QUALIFIED (GRADE ${fc.grade})`
+          : `FAILED / VIVA RETEST REQUIRED (${fc.scorePct}% SCORING · PASS IS 75%)`;
+        verdictEl.className = `verdict-tag ${fc.isPassing ? 'pass' : 'fail'}`;
+        verdictEl.style.background = '';
+        verdictEl.style.color = '';
+      }
+      if (timeEl) {
+        timeEl.textContent = `Attempted: ${fc.answered} Questions · Marks Scored: ${fc.correct} / ${fc.answered} (${fc.scorePct}%) · Correct: ${fc.correct} · Incorrect: ${fc.answered - fc.correct} · Pass Threshold: 75%`;
+      }
+      if (checklistTitleEl) {
+        checklistTitleEl.textContent = `ITEMIZED VIVA QUESTIONS & MARKS BREAKDOWN (${fc.correct}/${fc.answered} CORRECT):`;
+      }
+      if (checklistEl) {
+        const reviewItems = indianTrafficRules.getItemizedReview();
+        const answeredItems = reviewItems.filter((i) => i.isAnswered);
+
+        checklistEl.innerHTML = answeredItems.map((item) => `
+          <div class="checklist-question-review-row" style="background: rgba(255, 255, 255, 0.025); border: 1px solid ${item.isCorrect ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;">
+            <div class="q-review-top-line" style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size: 11px; font-weight: 800; color: #00d2b4; text-transform: uppercase;">
+                Q${item.index} · ${item.categoryLabel}
+              </span>
+              <span class="q-review-mark-pill ${item.isCorrect ? 'correct' : 'wrong'}">
+                ${item.isCorrect ? '+1 Mark · CORRECT ✓' : '0 Marks · INCORRECT ✗'}
+              </span>
+            </div>
+            <div class="q-review-title" style="font-size: 13.5px; font-weight: 700; color: #f8fafc; line-height: 1.4;">
+              ${item.title}: ${item.question}
+            </div>
+            <div class="q-review-ans-line" style="color: ${item.isCorrect ? '#6ee7b7' : '#fca5a5'};">
+              <strong>Your Selected Answer:</strong> ${item.candidateAnswerText}
+            </div>
+            ${!item.isCorrect ? `
+            <div class="q-review-ans-line" style="color: #34d399;">
+              <strong>Verified Correct RTO Rule:</strong> ${item.correctAnswerText}
+            </div>
+            ` : ''}
+            <div class="q-review-citation" style="font-size: 11px; color: var(--text-dim); line-height: 1.4; margin-top: 2px;">
+              <span style="color: var(--accent-cyan); font-weight: 600;">Legal Citation:</span> ${item.citation} — <span style="color: #cbd5e1;">${item.explanation}</span>
+            </div>
+          </div>
+        `).join('') + `
+          <div style="font-size: 11.5px; text-align: center; color: var(--text-dim); padding: 10px 4px; border-top: 1px solid rgba(255, 255, 255, 0.08); margin-top: 6px;">
+            Showing all ${answeredItems.length} attempted questions (${fc.correct} Correct · ${fc.answered - fc.correct} Incorrect). Total pool: ${reviewItems.length} RTO questions.
+          </div>
+        `;
+      }
+    }
+
+    if (btnReset) {
+      btnReset.textContent = '🔄 Retake Viva Exam';
+    }
+    if (btnVivaAction) {
+      btnVivaAction.textContent = '📋 Continue Viva Exam';
+      btnVivaAction.style.background = 'rgba(0, 210, 180, 0.15)';
+      btnVivaAction.style.borderColor = '#00d2b4';
+      btnVivaAction.style.color = '#00d2b4';
+    }
+    return;
+  }
+
+  // =========================================================================
+  // TAB 2: PRACTICAL 3D DRIVING TELEMETRY & HAZARD REACTION EVALUATION
+  // =========================================================================
   const scnState = scenarioEngine.getState();
   const calibState = gazeCalibration.getStatus();
-  const esp32Status = esp32Haptics.getStatus();
-  const vivaRes = geminiViva.evaluationResult;
 
   const fixLatency = scnState.firstFixationLatencyMs || 420;
   const dwell = scnState.secondaryDwellMs || 280;
@@ -1983,13 +2208,22 @@ export function renderDrivingTestScorecard() {
       status: 'PASS',
     },
     {
-      title: 'Gemini Flash AI Voice Viva',
-      notes: vivaRes
-        ? `Oral Viva Proficiency: Grade ${vivaRes.grade} (${vivaRes.score}/100 pts) · ${vivaRes.endorsement}`
-        : 'Candidate oral viva pending (Click "Start Oral Viva Exam" to complete evaluation)',
-      points: vivaRes ? Math.round(vivaRes.score * 0.1) : 0,
+      title: 'Traffic Rules & Road Sign Viva Examination',
+      notes: (() => {
+        const fc = indianTrafficRules.getScoreSummary();
+        return fc.answered > 0
+          ? `Traffic Rules Viva: Grade ${fc.grade} (${fc.scorePct}% · ${fc.correct}/${fc.answered} marks) · ${fc.verdict}`
+          : 'Traffic Rules Viva pending (Click "Take Traffic Rules Viva Exam" to complete)';
+      })(),
+      points: (() => {
+        const fc = indianTrafficRules.getScoreSummary();
+        return fc.answered > 0 ? Math.round(fc.scorePct * 0.1) : 0;
+      })(),
       maxPoints: 10,
-      status: vivaRes && vivaRes.score >= 75 ? 'PASS' : (vivaRes ? 'FAIL' : 'PENDING'),
+      status: (() => {
+        const fc = indianTrafficRules.getScoreSummary();
+        return fc.answered >= 1 && fc.isPassing ? 'PASS' : (fc.answered > 0 ? 'WARN' : 'PENDING');
+      })(),
     },
   ];
 
@@ -2001,32 +2235,41 @@ export function renderDrivingTestScorecard() {
     calculatedScore = Math.min(calculatedScore, 50);
   }
 
-  const isVivaPass = vivaRes ? vivaRes.score >= 75 : false;
-  const isEligible = calculatedScore >= 75 && isOutcomeSuccess && redLightCount === 0 && (!vivaRes || isVivaPass);
+  const fcRes = indianTrafficRules.getScoreSummary();
+  const isTheoryPass = fcRes.answered >= 1 ? fcRes.isPassing : true;
+  const isEligible = calculatedScore >= 75 && isOutcomeSuccess && redLightCount === 0 && isTheoryPass;
   let verdict = 'IN PROGRESS / QUALIFYING';
   if (redLightCount > 0) {
     verdict = 'DISQUALIFIED / RED LIGHT JUMP';
   } else if (scnState.outcome === 'COLLISION') {
     verdict = 'FAILED / COLLISION RECORDED';
-  } else if (vivaRes && !isVivaPass) {
-    verdict = 'FAILED / VIVA RETEST REQUIRED';
+  } else if (fcRes.answered >= 1 && !isTheoryPass) {
+    verdict = 'FAILED / TRAFFIC RULES VIVA RETEST REQUIRED';
   } else if (isEligible) {
-    verdict = vivaRes ? 'PASSED / LICENCE ENDORSED' : 'QUALIFYING (VIVA PENDING)';
+    verdict = fcRes.answered >= 1 ? 'PASSED / LICENCE ENDORSED' : 'QUALIFYING (VIVA PENDING)';
   }
 
-  const scoreEl = document.getElementById('modal-test-score');
-  const verdictEl = document.getElementById('modal-test-verdict');
-  const timeEl = document.getElementById('modal-test-timestamp');
-  const checklistEl = document.getElementById('modal-test-checklist');
+  if (titleEl) titleEl.textContent = 'OFFICIAL DRIVING SKILL TEST REPORT';
+  if (subtitleEl) subtitleEl.textContent = 'AI GAZE & HAZARD REACTION EVALUATION · CANDIDATE #402';
+  if (verdictLabelEl) verdictLabelEl.textContent = 'Official Test Verdict';
 
   if (scoreEl) scoreEl.textContent = calculatedScore;
+  if (scoreUnitEl) scoreUnitEl.textContent = '/ 100 PTS';
+  if (scoreCircle) {
+    scoreCircle.style.borderColor = isEligible ? '#10b981' : (calculatedScore >= 50 ? '#f59e0b' : '#ef4444');
+    scoreCircle.style.color = isEligible ? '#10b981' : (calculatedScore >= 50 ? '#f59e0b' : '#ef4444');
+  }
   if (verdictEl) {
     verdictEl.textContent = verdict;
     verdictEl.className = `verdict-tag ${isEligible ? 'pass' : 'fail'}`;
+    verdictEl.style.background = '';
+    verdictEl.style.color = '';
   }
   if (timeEl) {
     timeEl.textContent = `Evaluated at ${new Date().toLocaleTimeString()} · Scenario: ${scnState.activeScenario ? scnState.activeScenario.name : 'Urban Pedestrian Crossing'} (YOLOv8 + Vision Mamba)`;
   }
+  if (checklistTitleEl) checklistTitleEl.textContent = 'EVALUATION CRITERIA CHECKLIST:';
+
   if (checklistEl) {
     checklistEl.innerHTML = checks.map((chk) => `
       <div class="checklist-item-row">
@@ -2040,6 +2283,16 @@ export function renderDrivingTestScorecard() {
         </div>
       </div>
     `).join('');
+  }
+
+  if (btnReset) {
+    btnReset.textContent = '🔄 Retake / Reset 3D Test';
+  }
+  if (btnVivaAction) {
+    btnVivaAction.textContent = '📋 Take Traffic Rules Viva Exam';
+    btnVivaAction.style.background = '#00d2b4';
+    btnVivaAction.style.borderColor = '#00d2b4';
+    btnVivaAction.style.color = '#0b0f19';
   }
 }
 
@@ -2069,6 +2322,15 @@ export function updateCameraModeLabel(mode) {
     btn.innerHTML = mode === 'CHASE' ? '🎥 View: Chase [V]' : '🎥 View: Cockpit [V]';
     btn.style.borderColor = mode === 'CHASE' ? 'rgba(0, 210, 180, 0.5)' : 'rgba(56, 189, 248, 0.45)';
     btn.style.color = mode === 'CHASE' ? 'var(--accent-cyan)' : '#38bdf8';
+  }
+}
+
+export function updateVoiceButtonState(isMuted) {
+  const btn = document.getElementById('btn-toggle-voice');
+  if (btn) {
+    btn.textContent = isMuted ? '🔇 Voice: Muted' : '🔊 Voice: On';
+    btn.style.color = isMuted ? '#94a3b8' : '#00d2b4';
+    btn.style.borderColor = isMuted ? 'rgba(148, 163, 184, 0.35)' : 'rgba(0, 210, 180, 0.45)';
   }
 }
 

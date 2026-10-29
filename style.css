@@ -2678,3 +2678,490 @@ input:checked + .slider:before {
 
 
 
+
+/* ==========================================================================
+   RTO INDIAN TRAFFIC RULES & SIGN IDENTIFICATION FLASHCARDS
+   ========================================================================== */
+
+.flashcard-modal-content {
+  background: #0f1523;
+  border: 1px solid rgba(0, 210, 180, 0.35);
+  border-radius: 16px;
+  width: 900px;
+  max-width: 94vw;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(0, 210, 180, 0.15);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 16px;
+}
+
+.flashcard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.flashcard-cat-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cat-filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cat-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.cat-filter-btn.active {
+  background: rgba(0, 210, 180, 0.18);
+  border-color: #00d2b4;
+  color: #00d2b4;
+  box-shadow: 0 0 12px rgba(0, 210, 180, 0.25);
+}
+
+.mode-toggle-group {
+  display: flex;
+  background: rgba(11, 16, 27, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-btn.active {
+  background: var(--accent-cyan);
+  color: #0b0f19;
+}
+
+/* Card Body */
+.flashcard-main-card {
+  background: linear-gradient(135deg, rgba(19, 26, 41, 0.95), rgba(15, 21, 35, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  position: relative;
+  transition: border-color 0.25s ease;
+}
+
+.flashcard-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-category-tag {
+  background: rgba(0, 210, 180, 0.12);
+  border: 1px solid rgba(0, 210, 180, 0.35);
+  color: #00d2b4;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.card-counter-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.flashcard-content-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.flashcard-sign-display {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  background: rgba(11, 16, 27, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.flashcard-sign-display .sign-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+}
+
+.flashcard-prompt-area {
+  flex: 1;
+}
+
+.flashcard-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+
+.flashcard-question {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+/* Multiple Choice Options */
+.flashcard-options-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 4px;
+}
+
+.flashcard-option-btn {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+
+.flashcard-option-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 210, 180, 0.4);
+  transform: translateX(4px);
+}
+
+.opt-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.flashcard-option-btn.correct {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: #10b981 !important;
+  color: #6ee7b7 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+}
+
+.flashcard-option-btn.correct .opt-badge {
+  background: #10b981;
+  color: #0b0f19;
+}
+
+.flashcard-option-btn.wrong {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: #ef4444 !important;
+  color: #fca5a5 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+}
+
+.flashcard-option-btn.wrong .opt-badge {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Revealed Answer Panel */
+.flashcard-revealed-panel {
+  background: rgba(11, 16, 27, 0.85);
+  border: 1px solid rgba(0, 210, 180, 0.3);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.25s ease;
+}
+
+.revealed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.verified-answer-pill {
+  color: #34d399;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.citation-tag {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.revealed-explanation-text {
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.5;
+}
+
+/* Navigation & Controls */
+.flashcard-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ctrl-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fc-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.fc-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.fc-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fc-btn-teal {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #0b0f19;
+}
+
+.fc-btn-teal:hover {
+  background: #00f0cf;
+  box-shadow: 0 0 16px rgba(0, 210, 180, 0.4);
+}
+
+.fc-score-badge {
+  background: rgba(0, 210, 180, 0.12);
+  border: 1px solid rgba(0, 210, 180, 0.3);
+  color: #00d2b4;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+/* Final Summary Card */
+.flashcard-summary-card {
+  background: rgba(11, 16, 27, 0.95);
+  border: 1px solid rgba(0, 210, 180, 0.4);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.summary-score-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.summary-grade-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(0, 210, 180, 0.15);
+  border: 2px solid #00d2b4;
+  color: #00d2b4;
+  font-size: 26px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scorecard Tabs Bar */
+.scorecard-tabs-bar {
+  display: flex;
+  background: rgba(11, 16, 27, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 4px;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sc-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.sc-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sc-tab-btn.active {
+  background: var(--accent-cyan);
+  color: #0b0f19;
+  box-shadow: 0 0 12px rgba(0, 210, 180, 0.35);
+}
+
+.test-scorecard-card {
+  width: 720px !important;
+  max-width: 95vw !important;
+  max-height: 92vh !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+
+.checklist-table {
+  max-height: 420px !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+}
+
+.checklist-question-review-row {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  gap: 6px;
+}
+
+.q-review-top-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.q-review-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.q-review-mark-pill {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.q-review-mark-pill.correct {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid #10b981;
+}
+
+.q-review-mark-pill.wrong {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.q-review-mark-pill.unattempted {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.q-review-ans-line {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.q-review-citation {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}

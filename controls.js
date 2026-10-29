@@ -13,6 +13,8 @@ const callbacks = {
   onSeatbeltToggle: null,
   onShiftUp: null,
   onShiftDown: null,
+  onEyeResume: null,
+  onVoiceToggle: null,
 };
 
 // Virtual UI button inputs (set via UI pedal buttons or sliders)
@@ -43,6 +45,8 @@ export function init(eventCallbacks = {}) {
   callbacks.onSeatbeltToggle = eventCallbacks.onSeatbeltToggle || null;
   callbacks.onShiftUp = eventCallbacks.onShiftUp || null;
   callbacks.onShiftDown = eventCallbacks.onShiftDown || null;
+  callbacks.onEyeResume = eventCallbacks.onEyeResume || null;
+  callbacks.onVoiceToggle = eventCallbacks.onVoiceToggle || null;
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
@@ -63,8 +67,12 @@ function handleKeyDown(e) {
   // Single-press action triggers (only run once on initial press, not repeats)
   if (e.repeat) return;
 
-  if (key === 'KeyC' || key === 'KeyV') {
+  if (key === 'KeyC') {
+    if (callbacks.onEyeResume) callbacks.onEyeResume();
+  } else if (key === 'KeyV') {
     if (callbacks.onCameraToggle) callbacks.onCameraToggle();
+  } else if (key === 'KeyM') {
+    if (callbacks.onVoiceToggle) callbacks.onVoiceToggle();
   } else if (key === 'KeyB') {
     // Dedicated Seatbelt Buckle / Release Toggle Key
     if (callbacks.onSeatbeltToggle) callbacks.onSeatbeltToggle();

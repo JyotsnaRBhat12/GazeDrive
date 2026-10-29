@@ -93,9 +93,9 @@ export class ScenarioEngine {
     this.setScenario(nextIdx);
   }
 
-  resetTrial() {~
+  resetTrial() {
     this.clockMs = 0;
-    this.isRunning = true;~
+    this.isRunning = true;
     this.isAlertActive = false;
     this.isFrozen = false;
     this.firstFixationLatencyMs = null;
